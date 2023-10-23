@@ -19,7 +19,7 @@ In addition to the data automatically gathered through the APIs, there is some d
 - **S&P 500 Historical Components:**
   - Download `S&P 500 Historical Components & Changes(08-01-2023).csv` from [this repository](https://github.com/fja05680/sp500).
   - Place the downloaded file in `data/sp500_components`.
-- **Risk-Free Rate (DTB3):**
+- **Treasury Bill Rate (DTB3):**
   - Download the DTB3 data from [FRED](https://fred.stlouisfed.org/series/DTB3).
   - Save the data as `DTB3.csv` and place it in `data/treasury_bill_rate`.
 
