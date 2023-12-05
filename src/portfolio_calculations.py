@@ -341,36 +341,36 @@ def calculate_black_litterman_portfolio(portfolio_spec,
         portfolio_spec,
         trading_date_ts,
         k_stock_prices_df)
-    k_stock_excess_simple_returns_frequency_and_window_adjusted = calculate_excess_returns_from_prices(
-        portfolio_spec, k_stock_prices_frequency_and_window_adjusted_df, treasury_bill_rate_df, False)
+    k_stock_excess_log_returns_frequency_and_window_adjusted = calculate_excess_returns_from_prices(
+        portfolio_spec, k_stock_prices_frequency_and_window_adjusted_df, treasury_bill_rate_df, True)
 
     k_stock_market_caps_latest_df = k_stock_market_caps_df.iloc[-1].sort_values(ascending=False)
 
     # Covariance matrix
-    covariance_simple_returns_df = risk_models.CovarianceShrinkage(
-        k_stock_excess_simple_returns_frequency_and_window_adjusted,
+    covariance_log_returns_df = risk_models.CovarianceShrinkage(
+        k_stock_excess_log_returns_frequency_and_window_adjusted,
         returns_data=True,
         frequency = time_periods_per_year(portfolio_spec)).ledoit_wolf()
 
     viewdict = {}
     market_prior_excess = black_litterman.market_implied_prior_returns(k_stock_market_caps_latest_df.squeeze(),
                                                                 portfolio_spec["risk_aversion"],
-                                                                covariance_simple_returns_df,
+                                                                covariance_log_returns_df,
                                                                 risk_free_rate = 0)
 
-    bl = BlackLittermanModel(covariance_simple_returns_df, pi=market_prior_excess, absolute_views=viewdict)
-    bl_mean_simple_returns_series = bl.bl_returns()
-    bl_covariance_simple_returns_df = bl.bl_cov()
+    bl = BlackLittermanModel(covariance_log_returns_df, pi=market_prior_excess, absolute_views=viewdict)
+    bl_mean_log_returns_series = bl.bl_returns()
+    bl_covariance_log_returns_df = bl.bl_cov()
 
-    # Add risk free asset
-    bl_mean_simple_returns_with_risk_free_asset_series = bl_mean_simple_returns_series.copy()
-    bl_mean_simple_returns_with_risk_free_asset_series["RISK_FREE"] = 0
+    # Add risk-free asset
+    bl_mean_log_returns_with_risk_free_asset_series = bl_mean_log_returns_series.copy()
+    bl_mean_log_returns_with_risk_free_asset_series["RISK_FREE"] = 0
 
-    bl_covariance_simple_returns_with_risk_free_asset_df = bl_covariance_simple_returns_df.copy()
-    bl_covariance_simple_returns_with_risk_free_asset_df["RISK_FREE"] = 0
-    bl_covariance_simple_returns_with_risk_free_asset_df.loc["RISK_FREE"] = 0
+    bl_covariance_log_returns_with_risk_free_asset_df = bl_covariance_log_returns_df.copy()
+    bl_covariance_log_returns_with_risk_free_asset_df["RISK_FREE"] = 0
+    bl_covariance_log_returns_with_risk_free_asset_df.loc["RISK_FREE"] = 0
 
-    ef = EfficientFrontier(bl_mean_simple_returns_with_risk_free_asset_series, bl_covariance_simple_returns_with_risk_free_asset_df, weight_bounds=(0, 1))
+    ef = EfficientFrontier(bl_mean_log_returns_with_risk_free_asset_series, bl_covariance_log_returns_with_risk_free_asset_df, weight_bounds=(0, 1))
     raw_portfolio_comp = ef.max_quadratic_utility(risk_aversion=portfolio_spec["risk_aversion"])
 
     # Convert cleaned weights to DataFrame
@@ -479,7 +479,7 @@ def calculate_log_normal_portfolio(portfolio_spec,
         for idx, stock in enumerate(df.columns):
             y = log_prior_w_df.loc[stock, 'Weight']
             plt.hlines(y, idx - line_width / 2, idx + line_width / 2, color = 'red', linestyle = '-', linewidth = 2,
-                       label = 'Value Weighted Prior' if idx == 0 else "")
+                       label = 'Value-Weighted Prior' if idx == 0 else "")
 
         # Ensure only one "Prior" label appears in the legend
         handles, labels = plt.gca().get_legend_handles_labels()
@@ -563,6 +563,92 @@ def calculate_jorion_hyperparameter_portfolio(portfolio_spec,
 
     return portfolio_comp_df
 
+def calculate_shrinkage_portfolio(portfolio_spec,
+                                  trading_date_ts,
+                                  k_stock_prices_df,
+                                  treasury_bill_rate_df):
+
+        logger.info(f"Calculating shrinkage portfolio weights.")
+
+        # Adjust the stock prices DataFrame based on the portfolio's rebalancing frequency and rolling window
+        k_stock_prices_frequency_and_window_adjusted_df = daily_prices_to_rebalancing_frequency_and_window(
+            portfolio_spec, trading_date_ts, k_stock_prices_df
+        )
+
+        # Calculate excess returns
+        k_stock_excess_log_returns_frequency_and_window_adjusted = calculate_excess_returns_from_prices(
+            portfolio_spec, k_stock_prices_frequency_and_window_adjusted_df, treasury_bill_rate_df, True)
+
+        # Mean return
+        shrinkage_mean_log_returns_series = expected_returns.mean_historical_return(k_stock_excess_log_returns_frequency_and_window_adjusted,
+                                                                                      returns_data=True,
+                                                                                      compounding = False,
+                                                                                      frequency=time_periods_per_year(portfolio_spec))
+
+        # Covariance matrix
+        shrinkage_covariance_log_returns_df = risk_models.CovarianceShrinkage(k_stock_excess_log_returns_frequency_and_window_adjusted,
+                                                                                 returns_data=True,
+                                                                                frequency=time_periods_per_year(
+                                                                                    portfolio_spec)).ledoit_wolf()
+
+        # Add risk free asset
+        shrinkage_mean_log_returns_with_risk_free_asset_series = shrinkage_mean_log_returns_series.copy()
+        shrinkage_mean_log_returns_with_risk_free_asset_series["RISK_FREE"] = 0
+
+        shrinkage_covariance_log_returns_with_risk_free_asset_df = shrinkage_covariance_log_returns_df.copy()
+        shrinkage_covariance_log_returns_with_risk_free_asset_df["RISK_FREE"] = 0
+        shrinkage_covariance_log_returns_with_risk_free_asset_df.loc["RISK_FREE"] = 0
+
+        ef = EfficientFrontier(shrinkage_mean_log_returns_with_risk_free_asset_series,
+                               shrinkage_covariance_log_returns_with_risk_free_asset_df, weight_bounds=(0, 1))
+        raw_portfolio_comp = ef.max_quadratic_utility(risk_aversion=portfolio_spec["risk_aversion"])
+
+        # Convert cleaned weights to DataFrame
+        portfolio_comp_df = pd.DataFrame(list(ef.clean_weights().items()), columns=['Stock', 'Weight'])
+        portfolio_comp_df.set_index('Stock', inplace=True)
+        portfolio_comp_df = portfolio_comp_df.drop("RISK_FREE")
+
+        return portfolio_comp_df
+
+def calculate_min_variance_portfolio(portfolio_spec,
+                                      trading_date_ts,
+                                      k_stock_prices_df,
+                                      treasury_bill_rate_df):
+    logger.info(f"Calculating min variance portfolio weights.")
+
+    # Adjust the stock prices DataFrame based on the portfolio's rebalancing frequency and rolling window
+    k_stock_prices_frequency_and_window_adjusted_df = daily_prices_to_rebalancing_frequency_and_window(
+        portfolio_spec, trading_date_ts, k_stock_prices_df
+    )
+
+    # Calculate excess returns
+    k_stock_excess_log_returns_frequency_and_window_adjusted = calculate_excess_returns_from_prices(
+        portfolio_spec, k_stock_prices_frequency_and_window_adjusted_df, treasury_bill_rate_df, True)
+
+    # Mean return
+    min_variance_mean_log_returns_series = expected_returns.mean_historical_return(
+        k_stock_excess_log_returns_frequency_and_window_adjusted,
+        returns_data=True,
+        compounding=False,
+        frequency=time_periods_per_year(portfolio_spec))
+
+    # Covariance matrix
+    min_variance_covariance_log_returns_df = risk_models.CovarianceShrinkage(
+        k_stock_excess_log_returns_frequency_and_window_adjusted,
+        returns_data=True,
+        frequency=time_periods_per_year(
+            portfolio_spec)).ledoit_wolf()
+
+    ef = EfficientFrontier(min_variance_mean_log_returns_series,
+                           min_variance_covariance_log_returns_df, weight_bounds=(0, 1))
+    raw_portfolio_comp = ef.min_volatility()
+
+    # Convert cleaned weights to DataFrame
+    portfolio_comp_df = pd.DataFrame(list(ef.clean_weights().items()), columns=['Stock', 'Weight'])
+    portfolio_comp_df.set_index('Stock', inplace=True)
+
+    return portfolio_comp_df
+
 def calculate_portfolio_weights(trading_date_ts,
                                 portfolio_spec,
                                 market_data):
@@ -627,6 +713,18 @@ def calculate_portfolio_weights(trading_date_ts,
                                                                       trading_date_ts,
                                                                       k_stock_prices_df,
                                                                       treasury_bill_rate_df)
+
+    elif portfolio_spec["weights_spec"] == "shrinkage":
+        portfolio_comp_df = calculate_shrinkage_portfolio(portfolio_spec,
+                                                          trading_date_ts,
+                                                          k_stock_prices_df,
+                                                          treasury_bill_rate_df)
+
+    elif portfolio_spec["weights_spec"] == "min_variance":
+        portfolio_comp_df = calculate_min_variance_portfolio(portfolio_spec,
+                                                          trading_date_ts,
+                                                          k_stock_prices_df,
+                                                          treasury_bill_rate_df)
 
     else:
         logger.error(f"Unknown weights spec.")

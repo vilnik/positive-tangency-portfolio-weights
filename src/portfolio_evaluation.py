@@ -22,36 +22,37 @@ def format_pct_axis(x, pos):
     return f"{x * 100:.0f}%"
 
 def plot_performance(portfolio_setups_simple_returns_df,
-                     portfolio_setups_excess_simple_returns_df):
+                     portfolio_setups_excess_simple_returns_df,
+                     potfolio_size):
 
     # Plot daily returns
     qs.plots.returns(portfolio_setups_simple_returns_df,
-                           savefig = f"../results/returns")
+                           savefig = f"../results/returns_{potfolio_size}")
 
     # Plot yearly returns
     qs.plots.yearly_returns(portfolio_setups_simple_returns_df,
-                           savefig = f"../results/yearly_returns")
+                           savefig = f"../results/yearly_returns_{potfolio_size}")
 
     # Plot rolling Sharpe
     qs.plots.rolling_sharpe(portfolio_setups_excess_simple_returns_df,
-                           savefig = f"../results/rolling_sharpe")
+                           savefig = f"../results/rolling_sharpe_{potfolio_size}")
 
     # Plot rolling Sharpe
     qs.plots.rolling_sortino(portfolio_setups_excess_simple_returns_df,
-                           savefig = f"../results/rolling_sortino")
+                           savefig = f"../results/rolling_sortino_{potfolio_size}")
 
     # Plot rolling volatility
     qs.plots.rolling_volatility(portfolio_setups_simple_returns_df,
-                           savefig = f"../results/rolling_volatility")
+                           savefig = f"../results/rolling_volatility_{potfolio_size}")
 
     # Plot drawdown
     qs.plots.drawdown(portfolio_setups_simple_returns_df,
-                      savefig=f"../results/drawdown")
+                      savefig=f"../results/drawdown_{potfolio_size}")
 
 def process_and_highlight_values(metrics_df):
     # Set of metrics that are better when higher
     higher_is_better = {
-        'Cum. return', 'CAGR', 'Sharpe Ratio',
+        'Cum. return', 'CAGR', 'Sharpe Ratio', 'Prob. Sharpe Ratio',
         'Sortino Ratio', 'Calmar Ratio', 'Max. DD',
         'Avg. Loss', 'Avg. Return', 'Avg. Win', 'Best Day',
         'Worst Day', 'Daily VaR'
@@ -99,8 +100,9 @@ def process_and_highlight_values(metrics_df):
 
 
 def performance_metrics(portfolio_setups_simple_returns_df,
-                         portfolio_setups_excess_simple_returns_df,
-                        portfolio_setups_turnover):
+                        portfolio_setups_excess_simple_returns_df,
+                        portfolio_setups_turnover,
+                        portfolio_size):
     # Df to store portfolio metrics
     portfolio_setups_metrics_df = pd.DataFrame(columns=portfolio_setups_simple_returns_df.columns)
 
@@ -124,6 +126,13 @@ def performance_metrics(portfolio_setups_simple_returns_df,
 
         portfolio_sharpe_ratio = qs.stats.sharpe(portfolio_excess_simple_returns_series)
         portfolio_setups_metrics_df.at['Sharpe Ratio', column_name] = portfolio_sharpe_ratio
+
+    # Calculate the Probabilistic Sharpe ratio for each portfolio and add it as a row
+    for column_name in portfolio_setups_excess_simple_returns_df.columns:
+        portfolio_excess_simple_returns_series = portfolio_setups_excess_simple_returns_df[column_name]
+
+        portfolio_prob_sharpe_ratio = qs.stats.probabilistic_ratio(portfolio_excess_simple_returns_series)
+        portfolio_setups_metrics_df.at['Prob. Sharpe Ratio', column_name] = portfolio_prob_sharpe_ratio
 
     # Calculate the Sortino ratio for each portfolio and add it as a row
     for column_name in portfolio_setups_excess_simple_returns_df.columns:
@@ -202,7 +211,7 @@ def performance_metrics(portfolio_setups_simple_returns_df,
         portfolio_setups_metrics_df.at['Avg. Turnover', column_name] = portfolio_turnover
 
     highlighted_metrics_df = process_and_highlight_values(portfolio_setups_metrics_df)
-    highlighted_metrics_df.to_csv(f"../results/metrics.csv", index=True)
+    highlighted_metrics_df.to_csv(f"../results/metrics_{portfolio_size}.csv", index=True)
 
 def compute_excess_returns(portfolio_simple_returns_series,
                            treasury_bill_rate_df):
@@ -234,7 +243,8 @@ def compute_excess_returns(portfolio_simple_returns_series,
 
 def full_evaluation(portfolio_setups_simple_returns_df,
                     portfolio_setups_turnover,
-                    treasury_bill_rate_df):
+                    treasury_bill_rate_df,
+                    portfolio_size):
 
     # Get excess returns
     portfolio_setups_excess_simple_returns_df = pd.DataFrame(columns=portfolio_setups_simple_returns_df.columns)
@@ -249,9 +259,11 @@ def full_evaluation(portfolio_setups_simple_returns_df,
 
     # Performance metrics
     performance_metrics(portfolio_setups_simple_returns_df,
-                     portfolio_setups_excess_simple_returns_df,
-                    portfolio_setups_turnover)
+                        portfolio_setups_excess_simple_returns_df,
+                        portfolio_setups_turnover,
+                        portfolio_size)
 
     # Plot performance
     plot_performance(portfolio_setups_simple_returns_df,
-                     portfolio_setups_excess_simple_returns_df)
+                     portfolio_setups_excess_simple_returns_df,
+                     portfolio_size)

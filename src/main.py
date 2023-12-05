@@ -33,6 +33,7 @@ def main():
     market_data = data_handling.get_market_data()
     portfolio_setups_simple_returns = {}
     portfolio_setups_turnover = {}
+    portfolio_setups_sizes = {}
 
     # Backtest portfolios
     for portfolio_spec_name, portfolio_spec in EVAL_PORTFOLIO_SPECS.items():
@@ -47,6 +48,7 @@ def main():
             portfolio_setups_turnover[portfolio_spec_name] = pd.read_csv(turnover_returns_file,
                                                                     index_col=0,
                                                                     parse_dates=True)
+            portfolio_setups_sizes[portfolio_spec_name] = portfolio_spec["portfolio_size"]
         else:
             portfolio_performance = portfolio_calculations.backtest_portfolio(portfolio_spec,
                                                                                ts_start_date,
@@ -57,20 +59,36 @@ def main():
             portfolio_setups_simple_returns[portfolio_spec_name] = portfolio_performance["portfolio_simple_returns_series"]
             portfolio_setups_turnover[portfolio_spec_name] = portfolio_performance["portfolio_turnover_series"]
 
+            # Store size
+            portfolio_setups_sizes[portfolio_spec_name] = portfolio_spec["portfolio_size"]
+
             # Save to CSV
             portfolio_performance["portfolio_simple_returns_series"].to_csv(simple_returns_results_file, header=True)
             portfolio_performance["portfolio_turnover_series"].to_csv(turnover_returns_file, header=True)
 
-    # Simple returns
-    portfolio_setups_simple_returns = pd.concat(list(portfolio_setups_simple_returns.values()), axis=1)
+    # Group portfolio names by size
+    portfolios_by_size = {}
+    for name, size in portfolio_setups_sizes.items():
+        if size not in portfolios_by_size:
+            portfolios_by_size[size] = []
+        portfolios_by_size[size].append(name)
 
-    # Turnovers
-    portfolio_setups_turnover = pd.concat(list(portfolio_setups_turnover.values()), axis=1)
+    # Evaluate each group
+    for portfolio_size, portfolio_names in portfolios_by_size.items():
+        # Concatenate only the DataFrames for the current size
+        simple_returns_dfs = [portfolio_setups_simple_returns[name] for name in portfolio_names if
+                              name in portfolio_setups_simple_returns]
+        turnover_dfs = [portfolio_setups_turnover[name] for name in portfolio_names if
+                        name in portfolio_setups_turnover]
 
-    # Portfolio metrics
-    evaluation.full_evaluation(portfolio_setups_simple_returns,
-                            portfolio_setups_turnover,
-                            market_data["treasury_bill_rate_df"])
+        simple_returns_for_portfolio_size = pd.concat(simple_returns_dfs, axis=1)
+        turnover_for_portfolio_size = pd.concat(turnover_dfs, axis=1)
+
+        # Perform full evaluation for the current size group
+        evaluation.full_evaluation(simple_returns_for_portfolio_size,
+                                   turnover_for_portfolio_size,
+                                   market_data["treasury_bill_rate_df"],
+                                   portfolio_size)
 
 if __name__ == "__main__":
     main()
