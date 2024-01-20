@@ -117,7 +117,7 @@ def performance_metrics(portfolio_setups_simple_returns_df,
     for column_name in portfolio_setups_simple_returns_df.columns:
         portfolio_simple_returns_series = portfolio_setups_simple_returns_df[column_name]
 
-        portfolio_cagr = qs.stats.cagr(portfolio_simple_returns_series)
+        portfolio_cagr = qs.stats.cagr(portfolio_simple_returns_series, periods=365)
         portfolio_setups_metrics_df.at['CAGR', column_name] = portfolio_cagr
 
     # Calculate the Sharpe ratio for each portfolio and add it as a row
@@ -142,10 +142,10 @@ def performance_metrics(portfolio_setups_simple_returns_df,
         portfolio_setups_metrics_df.at['Sortino Ratio', column_name] = portfolio_sortino_ratio
 
     # Calculate the Calmar ratio for each portfolio and add it as a row
-    for column_name in portfolio_setups_excess_simple_returns_df.columns:
-        portfolio_excess_simple_returns_series = portfolio_setups_excess_simple_returns_df[column_name]
-
-        portfolio_calmar_ratio = qs.stats.calmar(portfolio_excess_simple_returns_series)
+    for column_name in portfolio_setups_simple_returns_df.columns:
+        portfolio_simple_returns_series = portfolio_setups_simple_returns_df[column_name]
+        
+        portfolio_calmar_ratio = qs.stats.cagr(portfolio_simple_returns_series, periods=365) / abs(qs.stats.max_drawdown(portfolio_simple_returns_series))
         portfolio_setups_metrics_df.at['Calmar Ratio', column_name] = portfolio_calmar_ratio
 
     # Calculate the max drawdown for each portfolio and add it as a row
