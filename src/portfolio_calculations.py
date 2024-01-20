@@ -279,6 +279,7 @@ def get_k_largest_stocks_market_caps(stock_market_caps_df,
         stock for stock in stock_prices_df.columns
         if (
                 stock in stock_market_caps_df.columns and
+                stock in tickers_list and
                 stock_prices_df.loc[trading_date_ts, stock] is not None and
                 stock_prices_df[stock].loc[:trading_date_ts].tail(rolling_window_days).notna().all()
         )
